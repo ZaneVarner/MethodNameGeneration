@@ -71,7 +71,7 @@ def convert_name_to_tokens(name) -> list:
     else:
         tokens = re.findall(r'[a-zA-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', name)
         tokens = list(map(lambda s: s.lower(), tokens))
-        return tokenss
+        return tokens
 
 
 def get_body_names(method_declaration):
