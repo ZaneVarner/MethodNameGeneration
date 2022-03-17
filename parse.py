@@ -9,7 +9,6 @@ INPUT_PARAMETERS = 'input_parameters'
 RETURN_TYPE = 'return_type'
 BODY_NAMES = 'body_names'
 
-
 def parse_source_file(source_file_path):
     """Parses a .java source file, extracting relevant contexts.
 
@@ -29,7 +28,7 @@ def parse_source_file(source_file_path):
 
     with open(source_file_path) as source_file:
         source = source_file.read()
-
+        
     tree = javalang.parse.parse(source)
 
     methods = []
@@ -37,7 +36,7 @@ def parse_source_file(source_file_path):
     for path, node in tree.filter(javalang.tree.MethodDeclaration):
         name = node.name
         documentation = get_documentation(node)
-
+        
         if documentation:
             enclosing_classes = get_enclosing_classes(path)
             input_parameters = get_input_parameters(node)
@@ -59,7 +58,7 @@ def parse_source_file(source_file_path):
 
 def convert_name_to_tokens(name) -> list:
     """Converts a name from snake case or camel case to list of string tokens.
-
+    
     Args:
         name: Entity name string in snake case or camel case
 
@@ -80,23 +79,42 @@ def get_body_names(method_declaration):
     There are several types of nodes that include relevant method body names,
     two of which are MemberReference and MethodInvocation. We should attempt to
     include all possible node types. Applying filters individually causes us to
-    append the names out of order, which may cause adverse results.
+    append the names out of order, which may cause adverse results. 
 
+    look backward in the path, to order the variables. or Depth first search in tree to order them.
+    OR turn list to set. body_names = set
     Args:
         method_declaration: MethodDeclaration node
 
     Returns:
         A list of method body names as strings
+
+        class MemberReference(Primary):
+        class MethodInvocation(Invocation):
+        class SuperMethodInvocation(Invocation):
+        class SuperMemberReference(Primary):
+        class ClassReference(Primary):
     """
     body_names = []
-
+    
     for _, node in method_declaration.filter(javalang.tree.MemberReference):
-        body_names.append(node.member)
+        body_names.extend(convert_name_to_tokens(node.member))
 
     for _, node in method_declaration.filter(javalang.tree.MethodInvocation):
         if node.qualifier:
-            body_names.append(node.qualifier)
-        body_names.append(node.member)
+            body_names.extend(convert_name_to_tokens(node.qualifier))
+        body_names.extend(convert_name_to_tokens(node.member))
+    
+    for _, node in method_declaration.filter(javalang.tree.ClassReference):
+        body_names.extend(convert_name_to_tokens(node.member))
+
+    for _, node in method_declaration.filter(javalang.tree.SuperMemberReference):
+        body_names.extend(convert_name_to_tokens(node.member))
+
+    for _, node in method_declaration.filter(javalang.tree.SuperMethodInvocation):
+        if node.qualifier:
+            body_names.extend(convert_name_to_tokens(node.qualifier))
+        body_names.extend(convert_name_to_tokens(node.member))
 
     return body_names
 
@@ -147,7 +165,7 @@ def get_enclosing_classes(path):
     as such and extract the names of these nodes to get the enclosing
     class/interface names. The ordering starts with the highest-level parent
     class/interface.
-
+    
     Args:
         path: Path tuple created by the javalang filter() method
 
@@ -155,10 +173,10 @@ def get_enclosing_classes(path):
         A list of the names of the enclosing classes as strings
     """
     enclosing_classes = []
-
+    
     for i in range(2, len(path), 2):
         enclosing_classes.append(path[i].name)
-
+    
     return enclosing_classes
 
 
