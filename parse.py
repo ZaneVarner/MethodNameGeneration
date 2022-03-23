@@ -98,24 +98,41 @@ def get_body_names(method_declaration):
     body_names = []
     
     for _, node in method_declaration.filter(javalang.tree.MemberReference):
-        body_names.extend(convert_name_to_tokens(node.member))
+        try:
+            body_names.extend(convert_name_to_tokens(node.member))
+        except:
+            print("MemberReference, object has no attribute member")
 
     for _, node in method_declaration.filter(javalang.tree.MethodInvocation):
-        if node.qualifier:
-            body_names.extend(convert_name_to_tokens(node.qualifier))
-        body_names.extend(convert_name_to_tokens(node.member))
+        try:
+            if node.qualifier:
+                body_names.extend(convert_name_to_tokens(node.qualifier))
+            body_names.extend(convert_name_to_tokens(node.member))
+        except:
+            print("MethodInvocation, object has no attribute member")
     
     for _, node in method_declaration.filter(javalang.tree.ClassReference):
-        body_names.extend(convert_name_to_tokens(node.member))
+        try:
+            body_names.extend(convert_name_to_tokens(node.member))
+        except:
+            print("ClassReference, object has no attribute member")
+            #weird error here: javalang.parser.JavaSyntaxError
 
     for _, node in method_declaration.filter(javalang.tree.SuperMemberReference):
-        body_names.extend(convert_name_to_tokens(node.member))
+        try:
+            body_names.extend(convert_name_to_tokens(node.member))
+        except:
+            print("SuperMemberReference, object has no attribute member")
 
     for _, node in method_declaration.filter(javalang.tree.SuperMethodInvocation):
-        if node.qualifier:
-            body_names.extend(convert_name_to_tokens(node.qualifier))
-        body_names.extend(convert_name_to_tokens(node.member))
-
+        try:
+            if node.qualifier:
+                body_names.extend(convert_name_to_tokens(node.qualifier))
+            body_names.extend(convert_name_to_tokens(node.member))
+        except:
+            print("SuperMethodInvocation, object has no attribute member")
+    
+    
     return body_names
 
 
@@ -175,7 +192,10 @@ def get_enclosing_classes(path):
     enclosing_classes = []
     
     for i in range(2, len(path), 2):
-        enclosing_classes.append(path[i].name)
+        try:
+            enclosing_classes.append(path[i].name)
+        except:
+            print("get_enclosing_classes, object has no 'path[i].name")
     
     return enclosing_classes
 
