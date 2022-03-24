@@ -1,6 +1,9 @@
 import javalang
 import re
-
+import pprint
+from numpy import NaN
+import os
+from threading import Lock
 
 NAME = 'name'
 DOCUMENTATION = 'documentation'
@@ -8,6 +11,31 @@ ENCLOSING_CLASSES = 'enclosing_classes'
 INPUT_PARAMETERS = 'input_parameters'
 RETURN_TYPE = 'return_type'
 BODY_NAMES = 'body_names'
+
+def main_parse(filepaths, thr_no):
+    """A method that gets filepaths of Java files and calls parse_source_file.
+    thr_no: thread number to be used in the name of the txt file.
+    """
+    lock = Lock()
+
+    for source_file_path in filepaths:
+        # Delete files if they already exist
+        if os.path.isfile('java_small'+str(thr_no)+'.txt'):
+            os.remove('java_small'+str(thr_no)+'.txt')
+        else:
+            pass
+        
+        lock.acquire()
+
+        # List of dictionaries containing the contexts of each method
+        methods = parse_source_file(source_file_path)
+        pp = pprint.PrettyPrinter(indent=2, sort_dicts=False)
+
+        with open('java_small'+str(thr_no)+'.txt', 'w') as writefile:
+            writefile.write(pprint.pformat(methods, indent=4))
+
+        lock.release()
+
 
 def parse_source_file(source_file_path):
     """Parses a .java source file, extracting relevant contexts.
@@ -26,12 +54,15 @@ def parse_source_file(source_file_path):
         List of dictionaries, each containing the contexts for each method
     """
 
-    with open(source_file_path) as source_file:
+    with open(source_file_path, encoding='utf-8') as source_file:
         source = source_file.read()
         
-    tree = javalang.parse.parse(source)
-
     methods = []
+    try:
+        tree = javalang.parse.parse(source)
+    except javalang.parser.JavaSyntaxError:
+        return methods
+        
 
     for path, node in tree.filter(javalang.tree.MethodDeclaration):
         name = node.name
@@ -116,7 +147,6 @@ def get_body_names(method_declaration):
             body_names.extend(convert_name_to_tokens(node.member))
         except:
             print("ClassReference, object has no attribute member")
-            #weird error here: javalang.parser.JavaSyntaxError
 
     for _, node in method_declaration.filter(javalang.tree.SuperMemberReference):
         try:
@@ -222,7 +252,11 @@ def get_documentation(method_declaration):
     if not documentation:
         return None
 
-    start = documentation.find(next(filter(str.isalnum, documentation)))
+    try:
+        start = documentation.find(next(filter(str.isalnum, documentation)))
+    except StopIteration:
+        return None
+    
     documentation = documentation[start:]
 
     end = documentation.find('.')
