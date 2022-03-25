@@ -16,25 +16,21 @@ def main_parse(filepaths, thr_no):
     """A method that gets filepaths of Java files and calls parse_source_file.
     thr_no: thread number to be used in the name of the txt file.
     """
-    lock = Lock()
-
+    
     for source_file_path in filepaths:
         # Delete files if they already exist
         if os.path.isfile('java_small'+str(thr_no)+'.txt'):
             os.remove('java_small'+str(thr_no)+'.txt')
         else:
             pass
-        
-        lock.acquire()
-
+    
         # List of dictionaries containing the contexts of each method
         methods = parse_source_file(source_file_path)
         pp = pprint.PrettyPrinter(indent=2, sort_dicts=False)
-
+        
         with open('java_small'+str(thr_no)+'.txt', 'w') as writefile:
             writefile.write(pprint.pformat(methods, indent=4))
 
-        lock.release()
 
 
 def parse_source_file(source_file_path):

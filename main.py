@@ -4,6 +4,8 @@ import os
 from os import walk
 import threading
 import time
+from multiprocessing import Process, Pool
+from functools import partial
 
 '''
 create a method that gets filepaths as arguements
@@ -34,23 +36,23 @@ def main():
             files.append(source_file_path)
     
     # to be deleted (for testing)
-    files = files[:100]
+    #files = files[:100]
 
     # determine chunk size and divide the filepath list
     chunk_size = 20
     chunks = [files[x:x+chunk_size] for x in range(0, len(files), chunk_size)]
-
-    threads = []
-    for i in range(len(chunks)):
-        #print(len(chunks[i]))
-        ti = threading.Thread(target=main_parse, args=(chunks[i],i,))
-        threads.append(ti)
-        ti.start()
-        print('thread '+str(i)+' started.')
     
-    # all threads are executed at this point
-    for i in threads:
-        i.join()
+    # creating arguements to pass to the processes
+    arguements = []
+    for i in range(len(chunks)):
+        arguements.append((chunks[i],i))
+
+    # multiprocessing
+    pool = Pool()       
+    #pool.map(partial(main_parse, chunks), range(len(chunks)))  
+    pool.starmap(main_parse,arguements)
+    pool.close()
+    pool.join()
 
     print("Done!")
 
