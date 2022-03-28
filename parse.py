@@ -1,36 +1,61 @@
 import javalang
 import re
-import pprint
-from numpy import NaN
 import os
-from threading import Lock
+
 
 NAME = 'name'
 DOCUMENTATION = 'documentation'
 ENCLOSING_CLASSES = 'enclosing_classes'
 INPUT_PARAMETERS = 'input_parameters'
 RETURN_TYPE = 'return_type'
-BODY_NAMES = 'body_names'
+BODY = 'body'
 
-def main_parse(filepaths, thr_no):
-    """A method that gets filepaths of Java files and calls parse_source_file.
-    thr_no: thread number to be used in the name of the txt file.
+
+def gather_source_file_paths(dataset_dir_path):
+    """Gathers a list of paths to all source files in a dataset directory.
+
+    Args:
+        dataset_dir_path: Path to root directory of dataset
+
+    Returns:
+        List of paths to all source files as strings
     """
-    
-    for source_file_path in filepaths:
-        # Delete files if they already exist
-        if os.path.isfile('java_small'+str(thr_no)+'.txt'):
-            os.remove('java_small'+str(thr_no)+'.txt')
-        else:
-            pass
-    
-        # List of dictionaries containing the contexts of each method
-        methods = parse_source_file(source_file_path)
-        pp = pprint.PrettyPrinter(indent=2, sort_dicts=False)
-        
-        with open('java_small'+str(thr_no)+'.txt', 'w') as writefile:
-            writefile.write(pprint.pformat(methods, indent=4))
+    dataset_dir_normpath = os.path.normpath(dataset_dir_path)
+    source_file_paths = []
 
+    for dir_path, _, file_names in os.walk(dataset_dir_normpath):
+        for file_name in file_names:
+            source_file_path = os.path.join(dir_path, file_name)
+            source_file_paths.append(source_file_path)
+
+    return source_file_paths
+
+
+def parse_and_write_source_files(source_file_paths, output_file_path):
+    """Parses a list of source files and writes them to a text file.
+
+    Args:
+        source_file_paths: List of source file paths
+        output_file_path: Path to the output file
+    """
+    with open(output_file_path, 'w') as output_file:
+
+        for source_file_path in source_file_paths:
+            methods = parse_source_file(source_file_path)
+
+            for method in methods:
+                output_file.write(method[NAME])
+                output_file.write('\n')
+                output_file.write(method[DOCUMENTATION])
+                output_file.write('\n')
+                output_file.write(method[ENCLOSING_CLASSES])
+                output_file.write('\n')
+                output_file.write(method[INPUT_PARAMETERS])
+                output_file.write('\n')
+                output_file.write(method[RETURN_TYPE])
+                output_file.write('\n')
+                output_file.write(method[BODY])
+                output_file.write('\n')
 
 
 def parse_source_file(source_file_path):
@@ -49,117 +74,105 @@ def parse_source_file(source_file_path):
     Returns:
         List of dictionaries, each containing the contexts for each method
     """
-
-    with open(source_file_path, encoding='utf-8') as source_file:
-        source = source_file.read()
-        
     methods = []
-    try:
-        tree = javalang.parse.parse(source)
-    except javalang.parser.JavaSyntaxError:
+
+    tree = build_parse_tree(source_file_path)
+
+    if not tree:
         return methods
-        
 
     for path, node in tree.filter(javalang.tree.MethodDeclaration):
-        name = node.name
+        name = ' '.join(convert_name_to_tokens(node.name))
         documentation = get_documentation(node)
-        
-        if documentation:
-            enclosing_classes = get_enclosing_classes(path)
-            input_parameters = get_input_parameters(node)
-            return_type = get_return_type(node)
-            body_names = get_body_names(node)
 
-            method = {
-                NAME: name,
-                DOCUMENTATION: documentation,
-                ENCLOSING_CLASSES: enclosing_classes,
-                INPUT_PARAMETERS: input_parameters,
-                RETURN_TYPE: return_type,
-                BODY_NAMES: body_names,
-            }
-            methods.append(method)
+        if documentation:
+            body = get_body(node)
+
+            if body:
+                enclosing_classes = get_enclosing_classes(path)
+                input_parameters = get_input_parameters(node)
+                return_type = get_return_type(node)
+
+                method = {
+                    NAME: name,
+                    DOCUMENTATION: documentation,
+                    ENCLOSING_CLASSES: enclosing_classes,
+                    INPUT_PARAMETERS: input_parameters,
+                    RETURN_TYPE: return_type,
+                    BODY: body,
+                }
+                methods.append(method)
 
     return methods
 
 
-def convert_name_to_tokens(name) -> list:
-    """Converts a name from snake case or camel case to list of string tokens.
-    
+def build_parse_tree(source_file_path):
+    """Builds the javalang parse tree from a path to a Java source file.
+
     Args:
-        name: Entity name string in snake case or camel case
+        source_file_path: String path to Java source file
 
     Returns:
-        list: List of lowercase string tokens
+        javalang tree object for the source file, or None if syntax error
     """
-    if name.find('_') > 0:
-        return name.lower().split('_')
-    else:
-        tokens = re.findall(r'[a-zA-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', name)
-        tokens = list(map(lambda s: s.lower(), tokens))
-        return tokens
+    with open(source_file_path, encoding='utf-8') as source_file:
+        source = source_file.read()
+
+    try:
+        return javalang.parse.parse(source)
+    except javalang.parser.JavaSyntaxError:
+        return None
 
 
-def get_body_names(method_declaration):
-    """Gets the method body names from a MethodDeclaration node.
+def get_body(method_declaration):
+    """Gets the set of method body names from a MethodDeclaration node.
 
     There are several types of nodes that include relevant method body names,
     two of which are MemberReference and MethodInvocation. We should attempt to
     include all possible node types. Applying filters individually causes us to
-    append the names out of order, which may cause adverse results. 
+    append the names out of order, which may cause adverse results.
 
-    look backward in the path, to order the variables. or Depth first search in tree to order them.
-    OR turn list to set. body_names = set
+    Method body names are gathered into a set (no duplicates, no ordering).
+
+    The current node types included are:
+        - MemberReference
+        - MethodInvocation
+        - SuperMethodInvocation
+        - SuperMemberReference
+        - ClassReference
+
     Args:
         method_declaration: MethodDeclaration node
 
     Returns:
-        A list of method body names as strings
-
-        class MemberReference(Primary):
-        class MethodInvocation(Invocation):
-        class SuperMethodInvocation(Invocation):
-        class SuperMemberReference(Primary):
-        class ClassReference(Primary):
+        Set of method body names concatenated into a string
     """
-    body_names = []
-    
+    body_tokens = set()
+
     for _, node in method_declaration.filter(javalang.tree.MemberReference):
-        try:
-            body_names.extend(convert_name_to_tokens(node.member))
-        except:
-            print("MemberReference, object has no attribute member")
+        body_tokens.update(convert_name_to_tokens(node.member))
 
     for _, node in method_declaration.filter(javalang.tree.MethodInvocation):
-        try:
-            if node.qualifier:
-                body_names.extend(convert_name_to_tokens(node.qualifier))
-            body_names.extend(convert_name_to_tokens(node.member))
-        except:
-            print("MethodInvocation, object has no attribute member")
-    
+        if node.qualifier:
+            body_tokens.update(convert_name_to_tokens(node.qualifier))
+        body_tokens.update(convert_name_to_tokens(node.member))
+
     for _, node in method_declaration.filter(javalang.tree.ClassReference):
-        try:
-            body_names.extend(convert_name_to_tokens(node.member))
-        except:
-            print("ClassReference, object has no attribute member")
+        body_tokens.update(convert_name_to_tokens(node.type.name))
 
-    for _, node in method_declaration.filter(javalang.tree.SuperMemberReference):
-        try:
-            body_names.extend(convert_name_to_tokens(node.member))
-        except:
-            print("SuperMemberReference, object has no attribute member")
+    for _, node in method_declaration.filter(
+            javalang.tree.SuperMemberReference):
+        body_tokens.update(convert_name_to_tokens(node.member))
 
-    for _, node in method_declaration.filter(javalang.tree.SuperMethodInvocation):
-        try:
-            if node.qualifier:
-                body_names.extend(convert_name_to_tokens(node.qualifier))
-            body_names.extend(convert_name_to_tokens(node.member))
-        except:
-            print("SuperMethodInvocation, object has no attribute member")
-    
-    
-    return body_names
+    for _, node in method_declaration.filter(
+            javalang.tree.SuperMethodInvocation):
+        if node.qualifier:
+            body_tokens.update(convert_name_to_tokens(node.qualifier))
+        body_tokens.update(convert_name_to_tokens(node.member))
+
+    body = ' '.join(body_tokens)
+
+    return body
 
 
 def get_return_type(method_declaration):
@@ -174,7 +187,8 @@ def get_return_type(method_declaration):
         The name of the return type as a string
     """
     if method_declaration.return_type:
-        return method_declaration.return_type.name
+        return ' '.join(
+            convert_name_to_tokens(method_declaration.return_type.name))
     else:
         return 'void'
 
@@ -186,13 +200,16 @@ def get_input_parameters(method_declaration):
         method_declaration: MethodDeclaration node
 
     Returns:
-        A list of tuples, containing the name and type of each input parameter
-        as strings
+        String containing the type and name of each input parameter
     """
-    input_parameters = []
+    input_parameter_tokens = []
 
     for parameter in method_declaration.parameters:
-        input_parameters.append((parameter.name, parameter.type.name))
+        input_parameter_tokens.extend(
+            convert_name_to_tokens(parameter.type.name))
+        input_parameter_tokens.extend(convert_name_to_tokens(parameter.name))
+
+    input_parameters = ' '.join(input_parameter_tokens)
 
     return input_parameters
 
@@ -203,26 +220,24 @@ def get_enclosing_classes(path):
     When we apply the javalang filter() method to look for MethodDeclaration
     nodes, we get a list of tuples (in the form of a generator). The first item
     in each tuple is the path to the node, which is also a tuple. In this path
-    tuple, the ClassDeclaration (or InterfaceDeclaration) nodes are located at
-    every other index, starting at index 2. So, we jump through the path tuple
-    as such and extract the names of these nodes to get the enclosing
-    class/interface names. The ordering starts with the highest-level parent
-    class/interface.
-    
+    tuple, we look for the ClassDeclaration nodes and record their names. The
+    ordering starts with the highest-level parent class.
+
     Args:
         path: Path tuple created by the javalang filter() method
 
     Returns:
-        A list of the names of the enclosing classes as strings
+        Enclosing class tokens concatenated as a string
     """
-    enclosing_classes = []
-    
-    for i in range(2, len(path), 2):
-        try:
-            enclosing_classes.append(path[i].name)
-        except:
-            print("get_enclosing_classes, object has no 'path[i].name")
-    
+    enclosing_class_tokens = []
+
+    for path_step in path:
+        if type(path_step) == javalang.tree.ClassDeclaration:
+            enclosing_class_tokens.extend(
+                convert_name_to_tokens(path_step.name))
+
+    enclosing_classes = ' '.join(enclosing_class_tokens)
+
     return enclosing_classes
 
 
@@ -241,28 +256,58 @@ def get_documentation(method_declaration):
         method_declaration: MethodDeclaration node
 
     Returns:
-        _description_
+        Processed method summary string
     """
     documentation = method_declaration.documentation
 
     if not documentation:
         return None
 
-    try:
-        start = documentation.find(next(filter(str.isalnum, documentation)))
-    except StopIteration:
-        return None
-    
-    documentation = documentation[start:]
+    # Remove the @link tags
+    documentation = re.sub(r'@link', '', documentation)
+    # Remove HTML tags
+    documentation = re.sub(r'<[^>]*>', '', documentation)
 
-    end = documentation.find('.')
-    if end < 0:
-        end = documentation.find('\n')
+    # End at first occurrence of "." or "@"
+    period_match = re.search(r'\.', documentation)
+    at_char_match = re.search(r'@', documentation)
+
+    if period_match and at_char_match:
+        end = min(period_match.start(), at_char_match.start())
+    elif period_match:
+        end = period_match.start()
+    elif at_char_match:
+        end = at_char_match.start()
+    else:
+        end = len(documentation)
+
     documentation = documentation[:end]
 
-    documentation = re.sub(r'[^a-zA-Z0-9]', ' ', documentation)
-    documentation = documentation.lower()
+    # Replace non-word characters with space
+    documentation = re.sub(r'\W', ' ', documentation)
 
-    documentation_tokens = documentation.split()
+    documentation_tokens = []
+    for name in documentation.split():
+        documentation_tokens.extend(convert_name_to_tokens(name))
 
-    return documentation_tokens
+    documentation = ' '.join(documentation_tokens)
+
+    return documentation
+
+
+def convert_name_to_tokens(name) -> list:
+    """Converts a name from snake case or camel case to list of string tokens.
+
+    Args:
+        name: Entity name string in snake case or camel case
+
+    Returns:
+        list: List of lowercase string tokens
+    """
+    if name.find('_') > 0:
+        return name.lower().split('_')
+    else:
+        tokens = re.findall(
+            r'[a-zA-Z0-9](?:[a-z0-9]+|[A-Z]*(?=[A-Z]|$))', name)
+        tokens = list(map(lambda s: s.lower(), tokens))
+        return tokens
