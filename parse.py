@@ -1,6 +1,7 @@
 import javalang
 import re
 import os
+import sys
 
 
 NAME = 'name'
@@ -31,16 +32,21 @@ def gather_source_file_paths(dataset_dir_path):
     return source_file_paths
 
 
-def parse_and_write_source_files(source_file_paths, output_file_path):
+def parse_and_write_source_files(
+        source_file_paths, output_file_path, verbose=True, process_id=0):
     """Parses a list of source files and writes them to a text file.
 
     Args:
         source_file_paths: List of source file paths
         output_file_path: Path to the output file
+        verbose: Whether to print update messages to the console
     """
+    n_files = len(source_file_paths)
+    n_methods = 0
+
     with open(output_file_path, 'w') as output_file:
 
-        for source_file_path in source_file_paths:
+        for i, source_file_path in enumerate(source_file_paths):
             methods = parse_source_file(source_file_path)
 
             for method in methods:
@@ -56,6 +62,19 @@ def parse_and_write_source_files(source_file_paths, output_file_path):
                 output_file.write('\n')
                 output_file.write(method[BODY])
                 output_file.write('\n')
+
+            n_methods += len(methods)
+
+            if verbose and (i + 1) % 1000 == 0:
+                print(
+                    f'Process {process_id}:',
+                    f'Completed {i + 1} / {n_files} files',
+                    f'(~{(i + 1) / n_files * 100:.1f}%),',
+                    f'{n_methods} methods processed')
+
+    print(
+        f'Process {process_id}: Completed {n_files} files,',
+        f'{n_methods} methods processed')
 
 
 def parse_source_file(source_file_path):
@@ -80,6 +99,8 @@ def parse_source_file(source_file_path):
 
     if not tree:
         return methods
+
+    sys.setrecursionlimit(10000)
 
     for path, node in tree.filter(javalang.tree.MethodDeclaration):
         name = ' '.join(convert_name_to_tokens(node.name))
@@ -115,12 +136,11 @@ def build_parse_tree(source_file_path):
     Returns:
         javalang tree object for the source file, or None if syntax error
     """
-    with open(source_file_path, encoding='utf-8') as source_file:
-        source = source_file.read()
-
     try:
+        with open(source_file_path, encoding='utf-8') as source_file:
+            source = source_file.read()
         return javalang.parse.parse(source)
-    except javalang.parser.JavaSyntaxError:
+    except:
         return None
 
 
@@ -158,7 +178,8 @@ def get_body(method_declaration):
         body_tokens.update(convert_name_to_tokens(node.member))
 
     for _, node in method_declaration.filter(javalang.tree.ClassReference):
-        body_tokens.update(convert_name_to_tokens(node.type.name))
+        if node.type:
+            body_tokens.update(convert_name_to_tokens(node.type.name))
 
     for _, node in method_declaration.filter(
             javalang.tree.SuperMemberReference):
