@@ -3,13 +3,15 @@ import re
 import os
 import sys
 
-
 NAME = 'name'
 DOCUMENTATION = 'documentation'
 ENCLOSING_CLASSES = 'enclosing_classes'
 INPUT_PARAMETERS = 'input_parameters'
 RETURN_TYPE = 'return_type'
 BODY = 'body'
+METHOD_NAME_95P = 5.0
+ALL_TOKENS_95P = 66.0
+
 
 
 def gather_source_file_paths(dataset_dir_path):
@@ -31,7 +33,6 @@ def gather_source_file_paths(dataset_dir_path):
 
     return source_file_paths
 
-
 def parse_and_write_source_files(
         source_file_paths, output_file_path, verbose=True, process_id=0):
     """Parses a list of source files and writes them to a text file.
@@ -48,20 +49,24 @@ def parse_and_write_source_files(
 
         for i, source_file_path in enumerate(source_file_paths):
             methods = parse_source_file(source_file_path)
-
+            
             for method in methods:
-                output_file.write(method[NAME])
-                output_file.write('\n')
-                output_file.write(method[DOCUMENTATION])
-                output_file.write('\n')
-                output_file.write(method[ENCLOSING_CLASSES])
-                output_file.write('\n')
-                output_file.write(method[INPUT_PARAMETERS])
-                output_file.write('\n')
-                output_file.write(method[RETURN_TYPE])
-                output_file.write('\n')
-                output_file.write(method[BODY])
-                output_file.write('\n')
+                all_token_len = len(re.findall(r'\w+', method[DOCUMENTATION]+' '+method[ENCLOSING_CLASSES]+' '+method[INPUT_PARAMETERS]+' '+method[RETURN_TYPE]+' '+method[BODY]))
+                name_len = len(re.findall(r'\w+', method[NAME]))
+                
+                if name_len <= METHOD_NAME_95P and all_token_len <= ALL_TOKENS_95P:
+                    output_file.write(method[NAME])
+                    output_file.write('\n')
+                    output_file.write(method[DOCUMENTATION])
+                    output_file.write('\n')
+                    output_file.write(method[ENCLOSING_CLASSES])
+                    output_file.write('\n')
+                    output_file.write(method[INPUT_PARAMETERS])
+                    output_file.write('\n')
+                    output_file.write(method[RETURN_TYPE])
+                    output_file.write('\n')
+                    output_file.write(method[BODY])
+                    output_file.write('\n')
 
             n_methods += len(methods)
 
