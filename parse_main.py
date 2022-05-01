@@ -1,8 +1,7 @@
 import math
 import os
-from multiprocessing import Process, Queue
+from multiprocessing import Process
 from parse import *
-from collections import deque
 
 
 def parse_main(dataset_dir_path, output_file_path, n_processes):
@@ -14,7 +13,6 @@ def parse_main(dataset_dir_path, output_file_path, n_processes):
 
     # Map each process index to the Process object
     processes = {}
-    #dist_queue = Queue()
 
     for i in range(n_processes):
         # Extract the section of the dataset for this Process
@@ -49,19 +47,6 @@ def parse_main(dataset_dir_path, output_file_path, n_processes):
 
             # Delete the temporary output file for the Process
             os.remove(block_output_file_path)
-    
-    #retrieveing queue
-    #lenghts = list(dist_queue.queue)
-    #plot_dist(lenghts)
-
-def plot_dist(length_tpl):
-    sns.set_style('whitegrid')
-    sns.kdeplot([x[0] for x in length_tpl], bw=0.5).set(title='Distribution of Method Name Lengths')
-    plt.show()
-
-    sns.kdeplot([x[1] for x in length_tpl], bw=0.5).set(title='Distribution of Code and Documentation Tokens')
-    plt.show()
-
 
 
 if __name__ == '__main__':

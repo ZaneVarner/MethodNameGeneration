@@ -8,7 +8,7 @@ import seaborn as sns
 def main(experiment_name):
     results_dir_path = f'../results/{experiment_name}'
     preds_file_path = f'{results_dir_path}/predictions.txt'
-    plot_losses_file_path = f'{results_dir_path}/plot_losses.txt'
+    # plot_losses_file_path = f'{results_dir_path}/plot_losses.txt'
 
     context_results = {}
     context_sizes = ['1 - 10', '11 - 20', '21 - 30', '30+']
@@ -31,7 +31,7 @@ def main(experiment_name):
         for i in range(0, len(lines), 3):
             source = lines[i].rstrip()
             target = lines[i + 1].rstrip()
-            pred = ' '.join(lines[i + 2].rstrip().split()[:-1])
+            pred = ' '.join(lines[i + 2].rstrip().replace("<EOS>", "").split())
 
             context_size = get_context_size(source)
             results = context_results[context_size]
@@ -88,7 +88,8 @@ def main(experiment_name):
     recall = recall_total / n_total
     f_score = 2 * precision * recall / (precision + recall)
     edit_distance = edit_distance_total / n_total
-    bleu = bleu_score.corpus_bleu(bleu_references, bleu_hypotheses)
+    bleu = bleu_score.corpus_bleu(
+        bleu_references, bleu_hypotheses, weights=(0.5, 0.5))
 
     print(f'Total test examples: {n_total}')
     print(f'Exact match rate: {exact_match}')
@@ -98,13 +99,13 @@ def main(experiment_name):
     print(f'Average edit distance: {edit_distance}')
     print(f'BLEU score: {bleu}')
 
-    plot_losses = []
+    # plot_losses = []
 
-    with open(plot_losses_file_path) as plot_losses_file:
-        for line in plot_losses_file.readlines():
-            plot_losses.append(float(line))
+    # with open(plot_losses_file_path) as plot_losses_file:
+    #     for line in plot_losses_file.readlines():
+    #         plot_losses.append(float(line))
 
-    plot_training_losses(plot_losses)
+    # plot_training_losses(plot_losses)
 
 
 def compute_precision(target_tokens, pred_tokens):
